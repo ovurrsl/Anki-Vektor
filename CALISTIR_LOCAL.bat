@@ -8,36 +8,16 @@ echo   ANKI VECTOR 2.0 + ARDUINO UNO Q + RTX 5070 LOCAL CALISTIRICI (WINDOWS)
 echo ============================================================================
 echo.
 
-echo [1/4] GitHub (ovurrsl/Anki-Vektor) uzerinden en guncel kodlar cekiliyor...
+echo [ADIM 1] GitHub (ovurrsl/Anki-Vektor) uzerinden en guncel kodlar cekiliyor...
 git pull origin main
 echo.
 
-echo [2/4] Python sanal ortami (.venv) ve paketler (pyserial, fastapi, vb.) kontrol ediliyor...
-IF NOT EXIST ".venv\Scripts\python.exe" (
-    python -m venv .venv
-)
-call .venv\Scripts\activate.bat
-python -m pip install --quiet --upgrade pip
-pip install --quiet -r pc_agent\requirements.txt -r gateway\requirements.txt
-IF NOT EXIST ".env" (
-    copy .env.example .env >nul
-)
-echo.
-
-echo [3/4] Bagli Arduino UNO Q (COM Port) taraniyor ve STM32U585 LED kodu kontrol ediliyor...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\auto_setup_windows_and_uno_q.ps1" -LaunchOnly:$false
-echo.
-
-echo [4/4] Local Sunucular ve Web Dashboard (http://localhost:8080/dashboard) aciliyor...
-start "UNO Q Gateway (Port 8000)" cmd /k "call .venv\Scripts\activate.bat && python -m gateway.main"
-start "PC Workstation Agent (Port 8080)" cmd /k "call .venv\Scripts\activate.bat && python -m pc_agent.server"
-
-timeout /t 3 >nul
-start http://localhost:8080/dashboard
+echo [ADIM 2] Otomatik Python 3.11 + Arduino UNO Q + Localhost:8080 Kurucu baslatiliyor...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\auto_setup_windows_and_uno_q.ps1"
 
 echo.
 echo ============================================================================
-echo   TAMAMLANDI! Tarayicinizda http://localhost:8080/dashboard acildi.
-echo   Gelecekte yeni guncellemeleri almak icin sadece bu dosyaya cift tiklayin!
+echo   ISLEM TAMAMLANDI!
+echo   Tarayicinizda http://localhost:8080/dashboard acildi.
 echo ============================================================================
 pause

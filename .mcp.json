@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "anki-vector-brain": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "brain_mcp.server"],
+      "env": {
+        "MOCK_ROBOT": "True",
+        "MOCK_CAMERA": "True",
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

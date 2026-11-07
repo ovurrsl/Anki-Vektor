@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
+from gateway.uno_q_bridge import UnoQBridge
 from gateway.vector_bridge import VectorBridge
 from gateway.wol_sentinel import WakeOnLanSentinel
 from pc_agent.camera_ptz import Insta360Link2Controller, MockCamera
@@ -26,7 +27,7 @@ from pc_agent.npu_engine import IntelNPUEngine
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
 logger = logging.getLogger("vector.pc_agent")
 
-app = FastAPI(title="Vector PC Workstation Agent (RTX 5070 + NPU)", version="1.0.0")
+app = FastAPI(title="Vector PC Workstation Agent (RTX 5070 + NPU)", version="1.1.0")
 
 # Workstation components
 if pc_config.mock_camera:
@@ -39,12 +40,17 @@ llm_router = LLMRouter()
 # Local bridge instance for mock robot simulation
 local_vector_bridge = VectorBridge(mock_mode=True)
 local_wol_sentinel = WakeOnLanSentinel()
+local_uno_q_bridge = UnoQBridge()
 
 
 # Models
 class PTZRequest(BaseModel):
     pan_arcsec: int
     tilt_arcsec: int
+
+
+class LedStateRequest(BaseModel):
+    state: str
 
 
 class DriveRequest(BaseModel):
@@ -92,13 +98,14 @@ async def get_dashboard():
 
 @app.get("/api/v1/status")
 async def get_status():
-    """Returns combined status of Workstation, Camera, NPU, and Vector."""
+    """Returns combined status of Workstation, Camera, NPU, UNO Q, and Vector."""
     robot_status = local_vector_bridge.get_status()
     npu_status = npu_engine.get_telemetry()
     return {
         "status": "ONLINE",
         "node": "PC Workstation (RTX 5070 + Intel NPU)",
         "robot": robot_status,
+        "uno_q": local_uno_q_bridge.get_status(),
         "camera": {
             "mock": pc_config.mock_camera,
             "current_pan_arcsec": camera.current_pan,
@@ -108,6 +115,12 @@ async def get_status():
         },
         "npu": npu_status,
     }
+
+
+@app.post("/api/v1/uno-q/led")
+async def set_uno_q_led(req: LedStateRequest):
+    """Sets the Arduino UNO Q STM32U585 8x13 Blue LED Matrix pattern."""
+    return local_uno_q_bridge.set_led_status(req.state)
 
 
 @app.get("/api/v1/camera/snapshot")

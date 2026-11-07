@@ -1,11 +1,10 @@
 """
 FastMCP Server for Vector Embodied AI.
-Exposes MCP tools over stdio and SSE for Claude Code, Gemini Live, and Local Agents.
+Exposes MCP tools over stdio and SSE for Claude Code, OpenCode, Gemini Live, and Local Agents.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any, Dict
 
@@ -13,6 +12,7 @@ from fastmcp import FastMCP
 
 from brain_mcp.tools import MCPToolRegistry
 from gateway.config import config
+from gateway.uno_q_bridge import UnoQBridge
 from gateway.vector_bridge import VectorBridge
 from gateway.wol_sentinel import WakeOnLanSentinel
 
@@ -21,7 +21,7 @@ logger = logging.getLogger("vector.mcp.server")
 # Instantiate FastMCP server
 mcp = FastMCP(
     "Anki-Vector-Brain",
-    description="Model Context Protocol Server for Anki Vector 2.0 and Desk Embodied AI",
+    description="Model Context Protocol Server for Anki Vector 2.0, Arduino UNO Q, and Desk Embodied AI",
 )
 
 # Bridge and sentinel instances
@@ -36,7 +36,8 @@ wol = WakeOnLanSentinel(
     pc_port=config.pc_port,
     wol_port=config.pc_wol_port,
 )
-registry = MCPToolRegistry(bridge, wol)
+uno_q = UnoQBridge()
+registry = MCPToolRegistry(bridge, wol, uno_q=uno_q)
 
 
 @mcp.tool()
@@ -109,8 +110,35 @@ async def camera_set_desk_view() -> str:
     return await registry.camera_set_desk_view()
 
 
+@mcp.tool()
+async def uno_q_set_led_matrix(state: str) -> Dict[str, Any]:
+    """
+    Set the 8x13 Blue LED Matrix pattern on Arduino UNO Q (STM32U585) via Dual-Brain RPC.
+    Valid states: IDLE, LISTENING, THINKING, WAKE_PC, ERROR.
+    """
+    return await registry.uno_q_set_led_matrix(state)
+
+
+@mcp.tool()
+async def uno_q_get_hardware_status() -> Dict[str, Any]:
+    """Get Arduino UNO Q (QRB2210 + STM32U585) hardware status and 8x13 LED matrix bitmap."""
+    return await registry.uno_q_get_hardware_status()
+
+
+@mcp.tool()
+async def calendar_get_today_schedule(announce_via_vector: bool = False) -> Dict[str, Any]:
+    """Fetch today's Google Calendar events and optionally speak the summary through Vector."""
+    return await registry.calendar_get_today_schedule(announce_via_vector=announce_via_vector)
+
+
+@mcp.tool()
+async def github_get_repo_status(repo: str = "ovurrsl/Anki-Vektor") -> Dict[str, Any]:
+    """Get repository commit status for Desk DevOps monitoring."""
+    return await registry.github_get_repo_status(repo=repo)
+
+
 def run_stdio():
-    """Runs the FastMCP server over standard I/O (for Claude Code / Gemini CLI integration)."""
+    """Runs the FastMCP server over standard I/O (for Claude Code / OpenCode / Gemini CLI integration)."""
     mcp.run()
 
 

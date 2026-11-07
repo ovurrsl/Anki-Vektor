@@ -18,6 +18,7 @@ import uvicorn
 from gateway.audio_pipeline import HalfDuplexAEC, pcm_to_wav, resample_pcm_24k_to_16k
 from gateway.config import config
 from gateway.intent_parser import OfflineIntentParser
+from gateway.uno_q_bridge import UnoQBridge
 from gateway.vector_bridge import VectorBridge
 from memory.db import MemoryManager
 from gateway.wol_sentinel import WakeOnLanSentinel
@@ -28,7 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("vector.gateway")
 
-app = FastAPI(title="Vector 2.0 Edge Gateway (Arduino UNO Q)", version="1.0.0")
+app = FastAPI(title="Vector 2.0 Edge Gateway (Arduino UNO Q)", version="1.1.0")
 
 # Service singletons
 vector_bridge = VectorBridge(
@@ -42,6 +43,7 @@ wol_sentinel = WakeOnLanSentinel(
     pc_port=config.pc_port,
     wol_port=config.pc_wol_port,
 )
+uno_q_bridge = UnoQBridge()
 audio_aec = HalfDuplexAEC()
 intent_parser = OfflineIntentParser()
 memory_manager = MemoryManager(db_path=config.memory_db_path, vector_dim=config.vector_dim)
@@ -50,6 +52,10 @@ memory_manager = MemoryManager(db_path=config.memory_db_path, vector_dim=config.
 # Request Models
 class CommandRequest(BaseModel):
     command: str
+
+
+class LedStateRequest(BaseModel):
+    state: str
 
 
 class DriveRequest(BaseModel):
@@ -84,6 +90,7 @@ class MemoryStoreRequest(BaseModel):
 async def on_startup():
     logger.info("Initializing Gateway services on Arduino UNO Q...")
     await vector_bridge.initialize()
+    uno_q_bridge.set_led_status("IDLE")
     await wol_sentinel.start_monitoring(poll_interval_sec=5.0)
     logger.info("Gateway services started successfully.")
 
@@ -101,15 +108,17 @@ async def root():
         "node": "Arduino UNO Q (4GB)",
         "mock_mode": config.mock_robot,
         "pc_awake": wol_sentinel.is_pc_awake,
+        "uno_q_led_state": uno_q_bridge.current_state,
     }
 
 
 @app.get("/telemetry")
 async def get_telemetry():
-    """Returns combined status of Vector, PC sentinel, and memory."""
+    """Returns combined status of Vector, UNO Q MCU, PC sentinel, and memory."""
     robot_status = vector_bridge.get_status()
     return {
         "robot": robot_status,
+        "uno_q": uno_q_bridge.get_status(),
         "sentinel": {
             "pc_host": config.pc_host,
             "pc_mac": config.pc_mac_address,
@@ -126,13 +135,20 @@ async def get_telemetry():
     }
 
 
+@app.post("/uno-q/led")
+async def set_uno_q_led(req: LedStateRequest):
+    """Sets the 8x13 Blue LED Matrix pattern on the Arduino UNO Q STM32U585 MCU."""
+    return uno_q_bridge.set_led_status(req.state)
+
+
 @app.post("/wake-pc")
 async def trigger_wake_pc():
     """Fires Wake-on-LAN magic packet to wake the RTX 5070 workstation."""
+    uno_q_bridge.set_led_status("WAKE_PC")
     success = wol_sentinel.send_wol_packet()
     if not success:
         raise HTTPException(status_code=500, detail="Failed to send WoL packet")
-    return {"status": "sent", "pc_mac": config.pc_mac_address}
+    return {"status": "sent", "pc_mac": config.pc_mac_address, "led_state": uno_q_bridge.current_state}
 
 
 @app.post("/robot/say")

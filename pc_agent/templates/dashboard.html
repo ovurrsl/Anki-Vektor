@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anki Vector 2.0 & Embodied AI Dashboard</title>
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --card-bg: #131c2e;
+      --border-color: #1e293b;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent-green: #10b981;
+      --accent-blue: #0ea5e9;
+      --accent-purple: #8b5cf6;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      padding: 16px;
+      line-height: 1.5;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 20px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+    .brand span { color: var(--accent-green); }
+    .badge {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-green { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+    .badge-blue { background: rgba(14, 165, 233, 0.2); color: var(--accent-blue); border: 1px solid var(--accent-blue); }
+    .badge-amber { background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid var(--accent-amber); }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: 1fr 1.3fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 1200px) {
+      .grid-container { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent-blue);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 8px;
+    }
+
+    /* Robot Controls */
+    .robot-screen {
+      background: #000;
+      border: 2px solid #22c55e;
+      border-radius: 8px;
+      height: 110px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .robot-eye {
+      width: 44px;
+      height: 60px;
+      background: #22c55e;
+      border-radius: 20px;
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.8);
+      transition: all 0.3s ease;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 12px 0;
+    }
+    button {
+      background: #1e293b;
+      color: #f8fafc;
+      border: 1px solid #334155;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    button:hover { background: #334155; border-color: var(--accent-blue); }
+    button.primary { background: var(--accent-green); color: #000; border: none; font-weight: 600; }
+    button.primary:hover { opacity: 0.9; }
+
+    /* Sliders */
+    .slider-group { margin: 10px 0; }
+    .slider-group label { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px; }
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #334155;
+      outline: none;
+    }
+
+    /* Viewport */
+    .camera-viewport {
+      background: #050811;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 340px;
+      position: relative;
+    }
+    .camera-viewport img { width: 100%; height: auto; display: block; object-fit: contain; }
+
+    /* Telemetry list */
+    .telemetry-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 0.88rem;
+    }
+    .telemetry-item span:first-child { color: var(--text-muted); }
+    .telemetry-item span:last-child { font-weight: 600; font-family: monospace; }
+
+    /* Chat / Speech */
+    .chat-box {
+      background: #080d1a;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      height: 150px;
+      overflow-y: auto;
+      padding: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+    }
+    .chat-msg { margin-bottom: 6px; }
+    .chat-msg.user { color: var(--accent-blue); }
+    .chat-msg.bot { color: var(--accent-green); }
+    .input-row { display: flex; gap: 8px; }
+    input[type="text"] {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid #334155;
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: #fff;
+      font-family: inherit;
+    }
+
+    /* Terminal Log */
+    .log-container {
+      margin-top: 16px;
+      background: #05070f;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      height: 120px;
+      overflow-y: auto;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <h1>ANKI <span>VECTOR</span> 2.0 &bull; EMBODIED AI</h1>
+      <span class="badge badge-green" id="badge-mode">MOCK MODE: AKTİF</span>
+      <span class="badge badge-blue">UNO Q DUAL-BRAIN</span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span style="font-size:0.85rem; color:var(--text-muted)">PC Durumu:</span>
+      <span class="badge badge-green" id="badge-pc">ONLINE</span>
+      <button onclick="triggerWoL()">PC'yi Uyandır (WoL)</button>
+    </div>
+  </header>
+
+  <div class="grid-container">
+
+    <!-- PANEL 1: VECTOR ROBOT KONTROL -->
+    <div class="card">
+      <div class="card-title">
+        <span>Anki Vector 2.0 (Fiziksel / Mock Beden)</span>
+        <span id="txt-dock" style="font-size:0.75rem; color:#22c55e;">İstasyonda (Docked)</span>
+      </div>
+
+      <div class="robot-screen">
+        <div class="robot-eye" id="eye-left"></div>
+        <div class="robot-eye" id="eye-right"></div>
+      </div>
+
+      <div style="display:flex; gap:6px; margin-bottom:12px;">
+        <button style="flex:1" onclick="setExpression('neutral')">Normal</button>
+        <button style="flex:1" onclick="setExpression('happy')">Mutlu</button>
+        <button style="flex:1" onclick="setExpression('sarcastic')">Grok</button>
+        <button style="flex:1" onclick="setExpression('sleepy')">Uyku</button>
+      </div>
+
+      <div class="slider-group">
+        <label><span>Kafa Açısı (Head Pitch)</span><span id="lbl-head">0.0°</span></label>
+        <input type="range" min="-22" max="45" value="0" id="rng-head" oninput="updateHead(this.value)">
+      </div>
+
+      <div class="slider-group">
+        <label><span>Kaldırma Kolu (Lift Arm)</span><span id="lbl-lift">0%</span></label>
+        <input type="range" min="0" max="100" value="0" id="rng-lift" oninput="updateLift(this.value)">
+      </div>
+
+      <div class="controls-grid">
+        <div></div>
+        <button onclick="drive(50)">▲ İleri</button>
+        <div></div>
+        <button onclick="turn(45)">◀ Sol</button>
+        <button onclick="dockRobot()">Şarj Ol</button>
+        <button onclick="turn(-45)">Sağ ▶</button>
+        <div></div>
+        <button onclick="drive(-50)">▼ Geri</button>
+        <div></div>
+      </div>
+
+      <div class="input-row" style="margin-top:12px;">
+        <input type="text" id="txt-say" placeholder="Vector'e Türkçe konuştur...">
+        <button class="primary" onclick="sayText()">Konuş</button>
+      </div>
+    </div>
+
+    <!-- PANEL 2: INSTA360 LINK 2 GÖZLEM VE KAMERA -->
+    <div class="card">
+      <div class="card-title">
+        <span>Insta360 Link 2 (Kuşbakışı Takip Kulesi)</span>
+        <button onclick="refreshSnapshot()" style="font-size:0.75rem; padding:2px 8px;">Kareyi Yenile</button>
+      </div>
+
+      <div class="camera-viewport">
+        <img id="img-camera" src="/api/v1/camera/snapshot" alt="Kamera Görüntüsü">
+      </div>
+
+      <div class="slider-group" style="margin-top:12px;">
+        <label><span>Yatay Motor (Pan Arcsec)</span><span id="lbl-pan">0°</span></label>
+        <input type="range" min="-480000" max="480000" step="3600" value="0" id="rng-pan" oninput="updatePan(this.value)">
+      </div>
+
+      <div class="slider-group">
+        <label><span>Dikey Motor (Tilt Arcsec)</span><span id="lbl-tilt">0°</span></label>
+        <input type="range" min="-300000" max="320000" step="3600" value="0" id="rng-tilt" oninput="updateTilt(this.value)">
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button style="flex:1" class="primary" onclick="setDeskView()">Masa Modu (DeskView 90°)</button>
+        <button style="flex:1" onclick="resetCamera()">Merkeze Al (0°)</button>
+      </div>
+    </div>
+
+    <!-- PANEL 3: DONANIM & AI ORKESTRASYON -->
+    <div class="card">
+      <div class="card-title">
+        <span>Donanım & Zeka Telemetrisi</span>
+        <span style="font-size:0.75rem; color:var(--accent-purple)">RTX 5070 + NPU</span>
+      </div>
+
+      <div class="telemetry-item"><span>Konum (X, Y):</span><span id="tel-pos">(0.0, 0.0) mm</span></div>
+      <div class="telemetry-item"><span>Batarya Seviyesi:</span><span id="tel-battery">88% (3.95V)</span></div>
+      <div class="telemetry-item"><span>Eko Engelleyici (AEC):</span><span id="tel-aec">DİNLEMEDE</span></div>
+      <div class="telemetry-item"><span>RTX 5070 VRAM:</span><span>4.8 GB / 12 GB (Q4_K_M)</span></div>
+      <div class="telemetry-item"><span>Intel NPU 3:</span><span>13 TOPS (Whisper VAD)</span></div>
+      <div class="telemetry-item"><span>Arduino UNO Q:</span><span>4 GB RAM &bull; Debian Trixie</span></div>
+
+      <div style="margin-top:14px;">
+        <div style="font-size:0.85rem; font-weight:600; margin-bottom:6px; color:var(--accent-green)">Dinamik AI Sohbet (Gemini & Grok):</div>
+        <div class="chat-box" id="chat-box">
+          <div class="chat-msg bot">Vector: Merhaba! Nöbetteyim, masaüstünü ve donanımları izliyorum.</div>
+        </div>
+        <div class="input-row">
+          <input type="text" id="chat-input" placeholder="Yapay zekaya bir şey sor...">
+          <button class="primary" onclick="sendChat()">Sor</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ALT PANEL: CANLI SİSTEM LOGLARI -->
+  <div class="log-container" id="log-console">
+    [SİSTEM BAŞLATILDI] Anki Vector 2.0 Hibrit Bedenlenmiş Yapay Zeka Mimarisi devrede.<br>
+    [MOCK MODE] Fiziksel donanım simülasyonu aktif; robot ve kamera sanal olarak izleniyor.
+  </div>
+
+  <script>
+    function log(msg) {
+      const console = document.getElementById("log-console");
+      const time = new Date().toLocaleTimeString();
+      console.innerHTML += `<br>[${time}] ${msg}`;
+      console.scrollTop = console.scrollHeight;
+    }
+
+    async function refreshSnapshot() {
+      const img = document.getElementById("img-camera");
+      img.src = "/api/v1/camera/snapshot?t=" + new Date().getTime();
+    }
+
+    async function setExpression(exp) {
+      log(`Göz ifadesi ayarlandı: ${exp}`);
+      const left = document.getElementById("eye-left");
+      const right = document.getElementById("eye-right");
+      if (exp === "happy") {
+        left.style.borderRadius = "30px 30px 10px 10px";
+        right.style.borderRadius = "30px 30px 10px 10px";
+      } else if (exp === "sarcastic") {
+        left.style.height = "40px";
+        right.style.height = "60px";
+      } else if (exp === "sleepy") {
+        left.style.height = "16px";
+        right.style.height = "16px";
+      } else {
+        left.style.height = "60px";
+        right.style.height = "60px";
+        left.style.borderRadius = "20px";
+        right.style.borderRadius = "20px";
+      }
+      await fetch("/api/v1/robot/expression", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({expression: exp})
+      });
+    }
+
+    async function updateHead(deg) {
+      document.getElementById("lbl-head").innerText = `${deg}°`;
+      await fetch("/api/v1/robot/head", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({angle_deg: parseFloat(deg)})
+      });
+    }
+
+    async function updateLift(val) {
+      document.getElementById("lbl-lift").innerText = `${val}%`;
+      await fetch("/api/v1/robot/lift", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({height: parseFloat(val) / 100.0})
+      });
+    }
+
+    async function drive(dist) {
+      log(`Robot sürülüyor: ${dist} mm`);
+      await fetch("/api/v1/robot/drive", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({distance_mm: dist, speed_mmps: 60.0})
+      });
+      refreshSnapshot();
+      pollTelemetry();
+    }
+
+    async function turn(deg) {
+      log(`Robot döndürülüyor: ${deg}°`);
+      await fetch("/api/v1/robot/turn", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({angle_deg: deg, speed_dps: 100.0})
+      });
+      refreshSnapshot();
+      pollTelemetry();
+    }
+
+    async function dockRobot() {
+      log("Robot şarj istasyonuna yönlendiriliyor...");
+      await fetch("/api/v1/robot/dock", {method: "POST"});
+      pollTelemetry();
+    }
+
+    async function sayText() {
+      const txt = document.getElementById("txt-say").value;
+      if (!txt) return;
+      log(`Vector konuşuyor: "${txt}"`);
+      document.getElementById("txt-say").value = "";
+      await fetch("/api/v1/robot/say", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text: txt})
+      });
+    }
+
+    async function updatePan(val) {
+      const deg = (val / 3600.0).toFixed(1);
+      document.getElementById("lbl-pan").innerText = `${deg}° (${val} arcsec)`;
+      await fetch("/api/v1/camera/ptz", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({pan_arcsec: parseInt(val), tilt_arcsec: parseInt(document.getElementById("rng-tilt").value)})
+      });
+      refreshSnapshot();
+    }
+
+    async function updateTilt(val) {
+      const deg = (val / 3600.0).toFixed(1);
+      document.getElementById("lbl-tilt").innerText = `${deg}° (${val} arcsec)`;
+      await fetch("/api/v1/camera/ptz", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({pan_arcsec: parseInt(document.getElementById("rng-pan").value), tilt_arcsec: parseInt(val)})
+      });
+      refreshSnapshot();
+    }
+
+    async function setDeskView() {
+      log("Kamera masaya 90 derece eğiliyor (DeskView: -288000 arcsec)...");
+      document.getElementById("rng-pan").value = 0;
+      document.getElementById("rng-tilt").value = -288000;
+      document.getElementById("lbl-pan").innerText = "0.0°";
+      document.getElementById("lbl-tilt").innerText = "-80.0° (-288000 arcsec)";
+      await fetch("/api/v1/camera/deskview", {method: "POST"});
+      refreshSnapshot();
+    }
+
+    async function resetCamera() {
+      document.getElementById("rng-pan").value = 0;
+      document.getElementById("rng-tilt").value = 0;
+      document.getElementById("lbl-pan").innerText = "0.0°";
+      document.getElementById("lbl-tilt").innerText = "0.0°";
+      await fetch("/api/v1/camera/ptz", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({pan_arcsec: 0, tilt_arcsec: 0})
+      });
+      refreshSnapshot();
+    }
+
+    async function triggerWoL() {
+      log("Wake-on-LAN sihirli paketi fırlatılıyor...");
+      const res = await fetch("/api/v1/system/wake-pc", {method: "POST"});
+      const data = await res.json();
+      log(`WoL Durumu: ${JSON.stringify(data)}`);
+    }
+
+    async function sendChat() {
+      const input = document.getElementById("chat-input");
+      const text = input.value.trim();
+      if (!text) return;
+
+      const chat = document.getElementById("chat-box");
+      chat.innerHTML += `<div class="chat-msg user">Sen: ${text}</div>`;
+      input.value = "";
+      chat.scrollTop = chat.scrollHeight;
+
+      try {
+        const resp = await fetch("/api/v1/llm/chat", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({prompt: text})
+        });
+        const data = await resp.json();
+        chat.innerHTML += `<div class="chat-msg bot">Vector: ${data.response}</div>`;
+        chat.scrollTop = chat.scrollHeight;
+        log(`AI Cevabı: ${data.response}`);
+      } catch (e) {
+        chat.innerHTML += `<div class="chat-msg bot" style="color:var(--accent-red)">Hata: AI servisine ulaşılamadı.</div>`;
+      }
+    }
+
+    async function pollTelemetry() {
+      try {
+        const resp = await fetch("/api/v1/status");
+        const data = await resp.json();
+        if (data.robot) {
+          document.getElementById("tel-pos").innerText = `(${data.robot.x}, ${data.robot.y}) mm`;
+          document.getElementById("tel-battery").innerText = `${data.robot.battery_percentage}% (${data.robot.battery_volts}V)`;
+          document.getElementById("txt-dock").innerText = data.robot.is_on_charger ? "İstasyonda (Docked)" : "Masada Geziyor";
+          document.getElementById("txt-dock").style.color = data.robot.is_on_charger ? "#22c55e" : "#f59e0b";
+        }
+      } catch (e) {}
+    }
+
+    setInterval(pollTelemetry, 3000);
+    setInterval(refreshSnapshot, 4000);
+  </script>
+</body>
+</html>

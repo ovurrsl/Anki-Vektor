@@ -58,6 +58,12 @@ class CameraModeRequest(BaseModel):
 
 class LedStateRequest(BaseModel):
     state: str
+    port: Optional[str] = None
+
+
+class FlashSketchRequest(BaseModel):
+    port: Optional[str] = None
+    fqbn: str = "arduino:stm32:uno_q"
 
 
 class ThermostatRequest(BaseModel):
@@ -136,10 +142,27 @@ async def get_status():
     }
 
 
+@app.get("/api/v1/uno-q/ports")
+async def get_uno_q_ports():
+    """Scans local Windows COM* and Linux /dev/tty* ports for connected Arduino UNO Q."""
+    local_uno_q_bridge._detect_transport()
+    return {
+        "active_port": local_uno_q_bridge.serial_port,
+        "transport": local_uno_q_bridge.transport_mode,
+        "ports": local_uno_q_bridge.list_available_serial_ports(),
+    }
+
+
 @app.post("/api/v1/uno-q/led")
 async def set_uno_q_led(req: LedStateRequest):
-    """Sets the Arduino UNO Q STM32U585 8x13 Blue LED Matrix pattern."""
-    return local_uno_q_bridge.set_led_status(req.state)
+    """Sets the Arduino UNO Q STM32U585 8x13 Blue LED Matrix pattern (and writes to COM port if connected)."""
+    return local_uno_q_bridge.set_led_status(req.state, override_port=req.port)
+
+
+@app.post("/api/v1/uno-q/flash")
+async def flash_uno_q_sketch(req: FlashSketchRequest):
+    """Compiles and uploads mcu_sketch/uno_q_status_matrix.ino to the locally connected Arduino UNO Q."""
+    return local_uno_q_bridge.compile_and_flash_sketch(fqbn=req.fqbn, port=req.port)
 
 
 @app.post("/api/v1/ecosystem/thermostat")

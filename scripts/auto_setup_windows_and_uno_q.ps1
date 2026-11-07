@@ -2,14 +2,10 @@
 <#
 .SYNOPSIS
     Automated One-Click Provisioner for Arduino UNO Q (ABX00173) + RTX 5070 / Intel NPU Workstation.
-.DESCRIPTION
-    1. Scans USB / Serial / Network (RNDIS / mDNS `unoq.local`) for a connected Arduino UNO Q.
-    2. Automatically downloads portable `arduino-cli` if not installed, installs STM32/UNO Q cores,
-       and compiles + uploads `mcu_sketch/uno_q_status_matrix.ino` to the STM32U585 MCU.
-    3. Deploys `gateway/` and `memory/` to the Arduino UNO Q Linux side (if reachable via SSH) or runs locally.
-    4. Configures `.env`, `.mcp.json`, and `opencode.json` for OpenCode & Claude Code.
-    5. Starts the PC Workstation Agent & 3D Web Dashboard on http://localhost:8080/dashboard.
 #>
+param(
+    [bool]$LaunchOnly = $true
+)
 
 $ErrorActionPreference = "Continue"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -68,14 +64,13 @@ if (Test-Path $CliExe) {
         Write-Host "  -> Bagli kart algilaniyor ($DetectedPort)..." -ForegroundColor Cyan
         $BoardList = & $CliExe board list
         Write-Host $BoardList
-        # Try UNO Q or UNO R4 / STM32 FQBN
         & $CliExe compile --fqbn arduino:stm32:uno_q "$RepoRoot\mcu_sketch\uno_q_status_matrix.ino" 2>$null
         & $CliExe upload -p $DetectedPort --fqbn arduino:stm32:uno_q "$RepoRoot\mcu_sketch\uno_q_status_matrix.ino" 2>$null
-        Write-Host "  -> Seri port uzerinden baslangic durum komutu (PC_ON=2) gonderiliyor..." -ForegroundColor Green
+        Write-Host "  -> Seri port uzerinden baslangic durum komutu (SET_STATUS:2) gonderiliyor..." -ForegroundColor Green
         try {
             $portObj = New-Object System.IO.Ports.SerialPort $DetectedPort, 115200, None, 8, one
             $portObj.Open()
-            $portObj.WriteLine("2")
+            $portObj.WriteLine("SET_STATUS:2")
             Start-Sleep -Milliseconds 300
             $portObj.Close()
         } catch {}
@@ -92,25 +87,27 @@ if ($UnoQReachable) {
     Write-Host "  -> unoq.local mDNS uzerinden yanit vermedi; Gateway + PC Agent yerel PC uzerinde baslatiliyor." -ForegroundColor Gray
 }
 
-# 4. Prepare Python Virtual Environment & .env
-Write-Host "`n[4/5] Python ortami ve MCP dosyalari (.mcp.json / opencode.json) hazirlaniyor..." -ForegroundColor Yellow
-if (-not (Test-Path "$RepoRoot\.env")) {
-    Copy-Item "$RepoRoot\.env.example" "$RepoRoot\.env"
-    if ($DetectedPort) {
-        Add-Content "$RepoRoot\.env" "`nUNO_Q_SERIAL_PORT=$DetectedPort"
+if ($LaunchOnly) {
+    # 4. Prepare Python Virtual Environment & .env
+    Write-Host "`n[4/5] Python ortami ve MCP dosyalari (.mcp.json / opencode.json) hazirlaniyor..." -ForegroundColor Yellow
+    if (-not (Test-Path "$RepoRoot\.env")) {
+        Copy-Item "$RepoRoot\.env.example" "$RepoRoot\.env"
+        if ($DetectedPort) {
+            Add-Content "$RepoRoot\.env" "`nUNO_Q_SERIAL_PORT=$DetectedPort"
+        }
     }
+
+    if (-not (Test-Path "$RepoRoot\.venv")) {
+        python -m venv "$RepoRoot\.venv"
+    }
+    & "$RepoRoot\.venv\Scripts\pip.exe" install -q -r "$RepoRoot\pc_agent\requirements.txt" -r "$RepoRoot\gateway\requirements.txt"
+
+    # 5. Launch Services & Dashboard
+    Write-Host "`n[5/5] UNO Q Gateway (Port 8000) ve PC Workstation Agent (Port 8080) baslatiliyor..." -ForegroundColor Yellow
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot'; .\.venv\Scripts\python.exe -m gateway.main"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot'; .\.venv\Scripts\python.exe -m pc_agent.server"
+
+    Start-Sleep -Seconds 3
+    Start-Process "http://localhost:8080/dashboard"
+    Write-Host "`nTum servisler baslatildi! Tarayicida http://localhost:8080/dashboard acildi." -ForegroundColor Green
 }
-
-if (-not (Test-Path "$RepoRoot\.venv")) {
-    python -m venv "$RepoRoot\.venv"
-}
-& "$RepoRoot\.venv\Scripts\pip.exe" install -q -r "$RepoRoot\pc_agent\requirements.txt" -r "$RepoRoot\gateway\requirements.txt"
-
-# 5. Launch Services & Dashboard
-Write-Host "`n[5/5] UNO Q Gateway (Port 8000) ve PC Workstation Agent (Port 8080) baslatiliyor..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot'; .\.venv\Scripts\python.exe -m gateway.main"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot'; .\.venv\Scripts\python.exe -m pc_agent.server"
-
-Start-Sleep -Seconds 3
-Start-Process "http://localhost:8080/dashboard"
-Write-Host "`nTum servisler baslatildi! Tarayicida http://localhost:8080/dashboard acildi." -ForegroundColor Green

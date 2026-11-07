@@ -283,24 +283,50 @@
       </div>
     </div>
 
-    <!-- PANEL 3: DONANIM & AI ORKESTRASYON -->
+    <!-- PANEL 3: ARDUINO UNO Q (8x13 LED MATRİS) & EKOSİSTEM -->
     <div class="card">
       <div class="card-title">
-        <span>Donanım & Zeka Telemetrisi</span>
-        <span style="font-size:0.75rem; color:var(--accent-purple)">RTX 5070 + NPU</span>
+        <span>Arduino UNO Q (STM32U585) &amp; Ekosistem</span>
+        <span id="uno-port-badge" style="font-size:0.75rem; color:var(--accent-blue)">PORT: OTOMATİK</span>
+      </div>
+
+      <!-- 8x13 LED Matrix Preview -->
+      <div style="background:#050811; border:1px solid var(--border-color); border-radius:8px; padding:10px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-bottom:6px;">
+          <span>STM32U585 8&times;13 Mavi LED Matris</span>
+          <span id="uno-state-lbl" style="color:var(--accent-blue); font-family:monospace;">WAKE_PC (2)</span>
+        </div>
+        <div id="uno-matrix-grid" style="display:grid; grid-template-columns:repeat(13, 1fr); gap:4px; background:#090d16; padding:8px; border-radius:6px;"></div>
+      </div>
+
+      <!-- Local COM Port + One-Click Flash -->
+      <div style="display:flex; gap:6px; margin-bottom:8px;">
+        <select id="sel-com-port" style="flex:1; background:#1e293b; color:#fff; border:1px solid #334155; border-radius:6px; padding:6px; font-size:0.8rem;">
+          <option value="">Otomatik USB Port (COM*)</option>
+        </select>
+        <button onclick="scanComPorts()" style="font-size:0.78rem; padding:6px 10px;">🔄 Port Tara</button>
+        <button class="primary" onclick="flashArduinoSketch()" style="font-size:0.78rem; padding:6px 10px;">⚡ Karta Yükle (.ino)</button>
+      </div>
+
+      <!-- Matrix State Buttons -->
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:12px;">
+        <button onclick="setUnoLed('WAKE_PC')" style="font-size:0.78rem;">🖥️ PC Açık</button>
+        <button onclick="setUnoLed('IDLE')" style="font-size:0.78rem;">🌙 Uyku</button>
+        <button onclick="setUnoLed('LISTENING')" style="font-size:0.78rem;">🎙️ Dinliyor</button>
+        <button onclick="setUnoLed('THINKING')" style="font-size:0.78rem;">🔊 Konuşuyor</button>
+        <button onclick="setUnoLed('VECTOR_OK')" style="font-size:0.78rem;">🤖 Vector</button>
+        <button onclick="setUnoLed('ERROR')" style="font-size:0.78rem;">⚠️ Hata</button>
       </div>
 
       <div class="telemetry-item"><span>Konum (X, Y):</span><span id="tel-pos">(0.0, 0.0) mm</span></div>
       <div class="telemetry-item"><span>Batarya Seviyesi:</span><span id="tel-battery">88% (3.95V)</span></div>
-      <div class="telemetry-item"><span>Eko Engelleyici (AEC):</span><span id="tel-aec">DİNLEMEDE</span></div>
-      <div class="telemetry-item"><span>RTX 5070 VRAM:</span><span>4.8 GB / 12 GB (Q4_K_M)</span></div>
-      <div class="telemetry-item"><span>Intel NPU 3:</span><span>13 TOPS (Whisper VAD)</span></div>
-      <div class="telemetry-item"><span>Arduino UNO Q:</span><span>4 GB RAM &bull; Debian Trixie</span></div>
+      <div class="telemetry-item"><span>Oda Termostatı (BLE):</span><span id="tel-thermo">22.4°C / Hedef 23.0°C</span></div>
+      <div class="telemetry-item"><span>AmbiFlux (108-LED Awa):</span><span id="tel-ambiflux">NEUTRAL (Cyan)</span></div>
 
-      <div style="margin-top:14px;">
-        <div style="font-size:0.85rem; font-weight:600; margin-bottom:6px; color:var(--accent-green)">Dinamik AI Sohbet (Gemini & Grok):</div>
-        <div class="chat-box" id="chat-box">
-          <div class="chat-msg bot">Vector: Merhaba! Nöbetteyim, masaüstünü ve donanımları izliyorum.</div>
+      <div style="margin-top:12px;">
+        <div style="font-size:0.85rem; font-weight:600; margin-bottom:6px; color:var(--accent-green)">Dinamik AI Sohbet (Gemini &amp; Grok):</div>
+        <div class="chat-box" id="chat-box" style="height:110px;">
+          <div class="chat-msg bot">Vector: Merhaba! Local sunucu ve Arduino UNO Q köprüsü hazır.</div>
         </div>
         <div class="input-row">
           <input type="text" id="chat-input" placeholder="Yapay zekaya bir şey sor...">
@@ -313,8 +339,8 @@
 
   <!-- ALT PANEL: CANLI SİSTEM LOGLARI -->
   <div class="log-container" id="log-console">
-    [SİSTEM BAŞLATILDI] Anki Vector 2.0 Hibrit Bedenlenmiş Yapay Zeka Mimarisi devrede.<br>
-    [MOCK MODE] Fiziksel donanım simülasyonu aktif; robot ve kamera sanal olarak izleniyor.
+    [LOCAL SİSTEM BAŞLATILDI] Anki Vector 2.0 + Arduino UNO Q + RTX 5070 Local Kontrol Merkezi devrede.<br>
+    [USB SERIAL] Fiziksel Arduino UNO Q için "🔄 Port Tara" veya "⚡ Karta Yükle (.ino)" butonlarını kullanabilirsiniz.
   </div>
 
   <script>
@@ -504,6 +530,47 @@
       } catch (e) {}
     }
 
+    setInterval(pollTelemetry, 3000);
+    setInterval(refreshSnapshot, 4000);
+  </script>
+</body>
+</html>
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({port: port, fqbn: "arduino:stm32:uno_q"})
+        });
+        const data = await resp.json();
+        log(`Arduino Flash Sonucu: ${JSON.stringify(data)}`);
+      } catch (e) {
+        log("Flash hatası: " + e.message);
+      }
+    }
+
+    async function pollTelemetry() {
+      try {
+        const resp = await fetch("/api/v1/status");
+        const data = await resp.json();
+        if (data.robot) {
+          document.getElementById("tel-pos").innerText = `(${data.robot.x}, ${data.robot.y}) mm`;
+          document.getElementById("tel-battery").innerText = `${data.robot.battery_percentage}% (${data.robot.battery_volts}V)`;
+          document.getElementById("txt-dock").innerText = data.robot.is_on_charger ? "İstasyonda (Docked)" : "Masada Geziyor";
+          document.getElementById("txt-dock").style.color = data.robot.is_on_charger ? "#22c55e" : "#f59e0b";
+        }
+        if (data.uno_q) {
+          document.getElementById("uno-state-lbl").innerText = data.uno_q.led_state;
+          document.getElementById("uno-port-badge").innerText = `PORT: ${data.uno_q.serial_port} (${data.uno_q.transport})`;
+          renderUnoMatrix(data.uno_q.matrix_bitmap);
+        }
+        if (data.thermostat) {
+          document.getElementById("tel-thermo").innerText = `${data.thermostat.temp_c}°C / Hedef ${data.thermostat.setpoint_c}°C (${data.thermostat.relay_state})`;
+        }
+        if (data.ambiflux) {
+          document.getElementById("tel-ambiflux").innerText = `${data.ambiflux.mood.toUpperCase()} RGB(${data.ambiflux.rgb.join(",")})`;
+        }
+      } catch (e) {}
+    }
+
+    scanComPorts();
+    pollTelemetry();
     setInterval(pollTelemetry, 3000);
     setInterval(refreshSnapshot, 4000);
   </script>

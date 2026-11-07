@@ -1,11 +1,13 @@
 """
-Unit tests for FastMCP Tools, Arduino UNO Q Dual-Brain Bridge, and Workspace Integrations.
+Unit tests for FastMCP Tools, Arduino UNO Q Dual-Brain Bridge, Ecosystem Bridges
+(ovurrsl/arduino-room-thermostat & ovurrsl/Dynamic-Lighting), and Workspace Integrations.
 """
 
 import json
 from pathlib import Path
 import pytest
 from brain_mcp.tools import MCPToolRegistry
+from gateway.ecosystem_bridge import AmbiFluxBridge, RoomThermostatBridge
 from gateway.uno_q_bridge import UnoQBridge
 from gateway.vector_bridge import VectorBridge
 from gateway.wol_sentinel import WakeOnLanSentinel
@@ -74,6 +76,37 @@ async def test_uno_q_bridge_and_workspace_mcp_tools():
     gh_res = await registry.github_get_repo_status()
     assert gh_res["repository"] == "ovurrsl/Anki-Vektor"
     assert isinstance(gh_res["recent_commits"], list)
+
+
+@pytest.mark.asyncio
+async def test_ovurrsl_ecosystem_bridges():
+    bridge = VectorBridge(mock_mode=True)
+    wol = WakeOnLanSentinel(pc_mac="00:11:22:33:44:55")
+    thermostat = RoomThermostatBridge()
+    ambiflux = AmbiFluxBridge(led_count=108)
+    registry = MCPToolRegistry(bridge, wol, thermostat=thermostat, ambiflux=ambiflux)
+
+    # 1. Test BLE float32 IEEE-754 encoding/decoding from ovurrsl/arduino-room-thermostat
+    encoded = thermostat.encode_float32_le(24.5)
+    assert len(encoded) == 4
+    assert thermostat.decode_float32_le(encoded) == 24.5
+
+    t_status = await registry.thermostat_get_status(announce_via_vector=True)
+    assert t_status["repo"] == "ovurrsl/arduino-room-thermostat"
+    assert t_status["service_uuid"] == "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+
+    t_updated = await registry.thermostat_set_temperature(25.5, mode="heating")
+    assert t_updated["setpoint_c"] == 25.5
+    assert t_updated["relay_state"] == "ON"
+
+    # 2. Test AmbiFlux Awa protocol frame generation from ovurrsl/Dynamic-Lighting
+    ambi_res = await registry.ambiflux_set_mood_light("happy")
+    assert ambi_res["repo"] == "ovurrsl/Dynamic-Lighting"
+    assert ambi_res["protocol"] == "Awa"
+    assert ambi_res["led_count"] == 108
+    # 6 header bytes + (108 * 3 payload bytes) + 3 Fletcher checksum trailer bytes = 333 bytes
+    assert ambi_res["frame_byte_length"] == 333
+    assert ambi_res["header_hex"].startswith("417761")  # 'Awa' in ASCII hex
 
 
 def test_mcp_and_opencode_config_files_exist():

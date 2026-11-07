@@ -17,6 +17,7 @@ import uvicorn
 
 from gateway.audio_pipeline import HalfDuplexAEC, pcm_to_wav, resample_pcm_24k_to_16k
 from gateway.config import config
+from gateway.ecosystem_bridge import AmbiFluxBridge, RoomThermostatBridge
 from gateway.intent_parser import OfflineIntentParser
 from gateway.uno_q_bridge import UnoQBridge
 from gateway.vector_bridge import VectorBridge
@@ -29,7 +30,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("vector.gateway")
 
-app = FastAPI(title="Vector 2.0 Edge Gateway (Arduino UNO Q)", version="1.1.0")
+app = FastAPI(title="Vector 2.0 Edge Gateway (Arduino UNO Q)", version="1.2.0")
 
 # Service singletons
 vector_bridge = VectorBridge(
@@ -44,6 +45,8 @@ wol_sentinel = WakeOnLanSentinel(
     wol_port=config.pc_wol_port,
 )
 uno_q_bridge = UnoQBridge()
+thermostat_bridge = RoomThermostatBridge()
+ambiflux_bridge = AmbiFluxBridge()
 audio_aec = HalfDuplexAEC()
 intent_parser = OfflineIntentParser()
 memory_manager = MemoryManager(db_path=config.memory_db_path, vector_dim=config.vector_dim)
@@ -56,6 +59,15 @@ class CommandRequest(BaseModel):
 
 class LedStateRequest(BaseModel):
     state: str
+
+
+class ThermostatRequest(BaseModel):
+    setpoint_c: float
+    mode: str = "heating"
+
+
+class AmbiFluxRequest(BaseModel):
+    mood: str
 
 
 class DriveRequest(BaseModel):
@@ -114,11 +126,13 @@ async def root():
 
 @app.get("/telemetry")
 async def get_telemetry():
-    """Returns combined status of Vector, UNO Q MCU, PC sentinel, and memory."""
+    """Returns combined status of Vector, UNO Q MCU, BLE Thermostat, AmbiFlux, PC sentinel, and memory."""
     robot_status = vector_bridge.get_status()
     return {
         "robot": robot_status,
         "uno_q": uno_q_bridge.get_status(),
+        "thermostat": thermostat_bridge.get_telemetry(),
+        "ambiflux": ambiflux_bridge.set_mood_lighting(ambiflux_bridge.current_mood),
         "sentinel": {
             "pc_host": config.pc_host,
             "pc_mac": config.pc_mac_address,
@@ -139,6 +153,18 @@ async def get_telemetry():
 async def set_uno_q_led(req: LedStateRequest):
     """Sets the 8x13 Blue LED Matrix pattern on the Arduino UNO Q STM32U585 MCU."""
     return uno_q_bridge.set_led_status(req.state)
+
+
+@app.post("/ecosystem/thermostat")
+async def set_room_thermostat(req: ThermostatRequest):
+    """Updates target temperature and mode on ovurrsl/arduino-room-thermostat via BLE."""
+    return thermostat_bridge.set_target_temperature(req.setpoint_c, req.mode)
+
+
+@app.post("/ecosystem/ambiflux")
+async def set_ambiflux_mood(req: AmbiFluxRequest):
+    """Updates 108-LED WS2812B monitor lighting (ovurrsl/Dynamic-Lighting Awa protocol)."""
+    return ambiflux_bridge.set_mood_lighting(req.mood)
 
 
 @app.post("/wake-pc")

@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from gateway.config import config
+from gateway.ecosystem_bridge import AmbiFluxBridge, RoomThermostatBridge
 from gateway.uno_q_bridge import UnoQBridge
 from gateway.vector_bridge import VectorBridge
 from gateway.wol_sentinel import WakeOnLanSentinel
@@ -32,10 +33,14 @@ class MCPToolRegistry:
         bridge: VectorBridge,
         wol: WakeOnLanSentinel,
         uno_q: Optional[UnoQBridge] = None,
+        thermostat: Optional[RoomThermostatBridge] = None,
+        ambiflux: Optional[AmbiFluxBridge] = None,
     ):
         self.bridge = bridge
         self.wol = wol
         self.uno_q = uno_q or UnoQBridge()
+        self.thermostat = thermostat or RoomThermostatBridge()
+        self.ambiflux = ambiflux or AmbiFluxBridge()
 
     async def vector_drive(self, distance_mm: float, speed_mmps: float = 50.0) -> str:
         """Drives the Vector robot straight forwards (positive) or backwards (negative)."""
@@ -83,8 +88,9 @@ class MCPToolRegistry:
         )
 
     async def vector_show_screen(self, expression: str) -> str:
-        """Changes Vector's 184x96 eye display (options: neutral, happy, sarcastic, curious, surprised, sleepy, angry)."""
+        """Changes Vector's 184x96 eye display and synchronizes AmbiFlux 108-LED monitor ambilight."""
         success = await self.bridge.set_face_expression(expression)
+        self.ambiflux.set_mood_lighting(expression)
         return (
             f"Display set to expression: '{expression}'"
             if success
@@ -107,6 +113,7 @@ class MCPToolRegistry:
     async def system_wake_pc(self) -> str:
         """Sends Wake-on-LAN Magic Packet to power on the RTX 5070 / NPU desktop workstation."""
         self.uno_q.set_led_status("WAKE_PC")
+        self.ambiflux.set_mood_lighting("wake_pc")
         success = self.wol.send_wol_packet()
         return (
             f"Wake-on-LAN packet transmitted to MAC {self.wol.pc_mac}."
@@ -147,6 +154,29 @@ class MCPToolRegistry:
     async def uno_q_get_hardware_status(self) -> Dict[str, Any]:
         """Returns Arduino UNO Q (QRB2210 + STM32U585) Dual-Brain status and LED matrix bitmap."""
         return self.uno_q.get_status()
+
+    async def thermostat_get_status(self, announce_via_vector: bool = False) -> Dict[str, Any]:
+        """
+        Reads room temperature, humidity, IAQ, and relay state from `ovurrsl/arduino-room-thermostat`
+        (Arduino GIGA R1 BME680 + UNO R4 Relay over BLE UUID 6E400001-B5A3-F393-E0A9-E50E24DCCA9E).
+        """
+        data = self.thermostat.get_telemetry()
+        if announce_via_vector:
+            await self.bridge.say_text(data["summary_tr"])
+        return data
+
+    async def thermostat_set_temperature(
+        self, setpoint_c: float, mode: str = "heating"
+    ) -> Dict[str, Any]:
+        """Sets target room temperature and mode (`heating`, `cooling`, `fan`, `off`) on the BLE Room Thermostat."""
+        return self.thermostat.set_target_temperature(setpoint_c=setpoint_c, mode=mode)
+
+    async def ambiflux_set_mood_light(self, mood: str) -> Dict[str, Any]:
+        """
+        Synchronizes the 108-LED WS2812B monitor ambilight (`ovurrsl/Dynamic-Lighting` `Awa` protocol)
+        with Vector's mood (`neutral`, `happy`, `curious`, `thinking`, `sarcastic`, `angry`, `sleepy`, `wake_pc`).
+        """
+        return self.ambiflux.set_mood_lighting(mood)
 
     async def calendar_get_today_schedule(self, announce_via_vector: bool = False) -> Dict[str, Any]:
         """

@@ -137,6 +137,24 @@ async def github_get_repo_status(repo: str = "ovurrsl/Anki-Vektor") -> Dict[str,
     return await registry.github_get_repo_status(repo=repo)
 
 
+@mcp.tool()
+async def thermostat_get_status(announce_via_vector: bool = False) -> Dict[str, Any]:
+    """Read room temperature, humidity, IAQ, and relay state from ovurrsl/arduino-room-thermostat (BLE GIGA R1 + UNO R4)."""
+    return await registry.thermostat_get_status(announce_via_vector=announce_via_vector)
+
+
+@mcp.tool()
+async def thermostat_set_temperature(setpoint_c: float, mode: str = "heating") -> Dict[str, Any]:
+    """Set target room temperature (10-35°C) and mode (heating, cooling, fan, off) on the Arduino BLE Room Thermostat."""
+    return await registry.thermostat_set_temperature(setpoint_c=setpoint_c, mode=mode)
+
+
+@mcp.tool()
+async def ambiflux_set_mood_light(mood: str) -> Dict[str, Any]:
+    """Set the 108-LED WS2812B monitor ambilight (ovurrsl/Dynamic-Lighting Awa protocol) to match Vector's mood."""
+    return await registry.ambiflux_set_mood_light(mood=mood)
+
+
 def run_stdio():
     """Runs the FastMCP server over standard I/O (for Claude Code / OpenCode / Gemini CLI integration)."""
     mcp.run()

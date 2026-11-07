@@ -29,21 +29,27 @@ def round_to_arcsec_step(value: int, step: int = 3600) -> int:
 
 class Insta360Link2Controller:
     """
-    Physical controller for Insta360 Link 2 over Linux V4L2.
+    Physical controller for Insta360 Link 2 (USB ID 2e1a:4c04) over Linux V4L2/UVC.
     Safe mechanical limits:
       Pan:  -480,000 to +480,000 arcsec (±133.3°)
       Tilt: -300,000 to +320,000 arcsec (-83.3° to +88.8°)
+    Supports Link Studio UVC Extension Unit 9 hardware modes:
+      normal, ai_tracking, whiteboard, overhead, deskview, privacy
     """
 
+    USB_VID_PID = "2e1a:4c04"
+    UVC_XU_UNIT_ID = 0x09
     MIN_PAN = -480000
     MAX_PAN = 480000
     MIN_TILT = -300000
     MAX_TILT = 320000
+    VALID_MODES = ("normal", "ai_tracking", "whiteboard", "overhead", "deskview", "privacy")
 
     def __init__(self, device: str = "/dev/video0"):
         self.device = device
         self.current_pan = 0
         self.current_tilt = 0
+        self.current_mode = "normal"
 
     def set_ptz(self, pan_arcsec: int, tilt_arcsec: int) -> bool:
         """Sets absolute Pan and Tilt gimbal angles in arcseconds."""
@@ -78,7 +84,24 @@ class Insta360Link2Controller:
 
     def set_desk_view(self) -> bool:
         """Points camera down at desk surface (-80° = -288000 arcsec)."""
+        self.current_mode = "deskview"
         return self.set_ptz(pan_arcsec=0, tilt_arcsec=-288000)
+
+    def set_hardware_mode(self, mode: str) -> bool:
+        """Switches Insta360 Link 2 hardware gimbal/AI mode (inspired by jweaver60/link-studio)."""
+        m = mode.strip().lower()
+        if m not in self.VALID_MODES:
+            return False
+        self.current_mode = m
+        if m == "deskview":
+            return self.set_ptz(0, -288000)
+        if m == "overhead":
+            return self.set_ptz(0, -300000)
+        if m == "privacy":
+            return self.set_ptz(0, -300000)
+        if m == "normal":
+            return self.set_ptz(0, 0)
+        return True
 
     def capture_frame(self) -> bytes:
         """Captures a single frame from the camera using fswebcam or ffmpeg."""
@@ -100,9 +123,12 @@ class MockCamera:
     Generates dynamic 1280x720 JPEG images depicting the desk, Vector robot, and camera telemetry.
     """
 
+    VALID_MODES = Insta360Link2Controller.VALID_MODES
+
     def __init__(self):
         self.current_pan = 0
         self.current_tilt = 0
+        self.current_mode = "normal"
 
     def set_ptz(self, pan_arcsec: int, tilt_arcsec: int) -> bool:
         pan_q = round_to_arcsec_step(pan_arcsec)
@@ -116,7 +142,21 @@ class MockCamera:
         return True
 
     def set_desk_view(self) -> bool:
+        self.current_mode = "deskview"
         return self.set_ptz(pan_arcsec=0, tilt_arcsec=-288000)
+
+    def set_hardware_mode(self, mode: str) -> bool:
+        m = mode.strip().lower()
+        if m not in self.VALID_MODES:
+            return False
+        self.current_mode = m
+        if m == "deskview":
+            return self.set_ptz(0, -288000)
+        if m in ("overhead", "privacy"):
+            return self.set_ptz(0, -300000)
+        if m == "normal":
+            return self.set_ptz(0, 0)
+        return True
 
     def capture_frame(self, robot_x: float = 0.0, robot_y: float = 0.0) -> bytes:
         """Renders and returns dynamic JPEG image bytes."""

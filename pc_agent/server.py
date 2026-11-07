@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
+from gateway.ecosystem_bridge import AmbiFluxBridge, RoomThermostatBridge
 from gateway.uno_q_bridge import UnoQBridge
 from gateway.vector_bridge import VectorBridge
 from gateway.wol_sentinel import WakeOnLanSentinel
@@ -27,7 +28,7 @@ from pc_agent.npu_engine import IntelNPUEngine
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
 logger = logging.getLogger("vector.pc_agent")
 
-app = FastAPI(title="Vector PC Workstation Agent (RTX 5070 + NPU)", version="1.1.0")
+app = FastAPI(title="Vector PC Workstation Agent (RTX 5070 + NPU)", version="1.2.0")
 
 # Workstation components
 if pc_config.mock_camera:
@@ -41,6 +42,8 @@ llm_router = LLMRouter()
 local_vector_bridge = VectorBridge(mock_mode=True)
 local_wol_sentinel = WakeOnLanSentinel()
 local_uno_q_bridge = UnoQBridge()
+local_thermostat = RoomThermostatBridge()
+local_ambiflux = AmbiFluxBridge()
 
 
 # Models
@@ -49,8 +52,21 @@ class PTZRequest(BaseModel):
     tilt_arcsec: int
 
 
+class CameraModeRequest(BaseModel):
+    mode: str
+
+
 class LedStateRequest(BaseModel):
     state: str
+
+
+class ThermostatRequest(BaseModel):
+    setpoint_c: float
+    mode: str = "heating"
+
+
+class AmbiFluxRequest(BaseModel):
+    mood: str
 
 
 class DriveRequest(BaseModel):
@@ -98,7 +114,7 @@ async def get_dashboard():
 
 @app.get("/api/v1/status")
 async def get_status():
-    """Returns combined status of Workstation, Camera, NPU, UNO Q, and Vector."""
+    """Returns combined status of Workstation, Camera, NPU, UNO Q, Thermostat, AmbiFlux, and Vector."""
     robot_status = local_vector_bridge.get_status()
     npu_status = npu_engine.get_telemetry()
     return {
@@ -106,8 +122,11 @@ async def get_status():
         "node": "PC Workstation (RTX 5070 + Intel NPU)",
         "robot": robot_status,
         "uno_q": local_uno_q_bridge.get_status(),
+        "thermostat": local_thermostat.get_telemetry(),
+        "ambiflux": local_ambiflux.set_mood_lighting(local_ambiflux.current_mood),
         "camera": {
             "mock": pc_config.mock_camera,
+            "mode": getattr(camera, "current_mode", "normal"),
             "current_pan_arcsec": camera.current_pan,
             "current_tilt_arcsec": camera.current_tilt,
             "current_pan_deg": round(camera.current_pan / 3600.0, 1),
@@ -121,6 +140,25 @@ async def get_status():
 async def set_uno_q_led(req: LedStateRequest):
     """Sets the Arduino UNO Q STM32U585 8x13 Blue LED Matrix pattern."""
     return local_uno_q_bridge.set_led_status(req.state)
+
+
+@app.post("/api/v1/ecosystem/thermostat")
+async def set_thermostat(req: ThermostatRequest):
+    """Updates target temperature and mode on ovurrsl/arduino-room-thermostat."""
+    return local_thermostat.set_target_temperature(req.setpoint_c, req.mode)
+
+
+@app.post("/api/v1/ecosystem/ambiflux")
+async def set_ambiflux(req: AmbiFluxRequest):
+    """Updates 108-LED WS2812B monitor ambilight mood (ovurrsl/Dynamic-Lighting)."""
+    return local_ambiflux.set_mood_lighting(req.mood)
+
+
+@app.post("/api/v1/camera/mode")
+async def set_camera_mode(req: CameraModeRequest):
+    """Sets Insta360 Link 2 UVC hardware mode (normal, ai_tracking, whiteboard, overhead, deskview, privacy)."""
+    success = camera.set_hardware_mode(req.mode)
+    return {"status": "ok" if success else "failed", "mode": getattr(camera, "current_mode", "normal")}
 
 
 @app.get("/api/v1/camera/snapshot")

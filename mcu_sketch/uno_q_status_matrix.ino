@@ -100,18 +100,48 @@ void setup() {
   // CRITICAL: Arduino UNO Q boot logo shows on matrix for ~20-30s during Linux boot.
   // Wait gracefully before taking control of the matrix.
   delay(1000);
+  Serial.begin(115200);
   matrix.begin();
 
   // Initialize Arduino Bridge to communicate with Qualcomm QRB2210 MPU
   Bridge.begin();
   Bridge.bind("set_status", onSetStatus);
 
-  // Show Standby initial frame
-  matrix.loadFrame(frame_pc_off);
+  // Show Active PC_ON initial frame so user immediately sees it flashed
+  onSetStatus(2);
+  Serial.println("UNO_Q_MATRIX_READY");
+}
+
+void handleSerialCommand(String cmd) {
+  cmd.trim();
+  cmd.toUpperCase();
+  if (cmd.length() == 0) return;
+
+  if (cmd == "1" || cmd == "IDLE" || cmd == "STANDBY" || cmd == "SET_STATUS:IDLE" || cmd == "SET_STATUS:1") {
+    onSetStatus(1);
+  } else if (cmd == "2" || cmd == "PC_ON" || cmd == "WAKE_PC" || cmd == "SET_STATUS:WAKE_PC" || cmd == "SET_STATUS:2") {
+    onSetStatus(2);
+  } else if (cmd == "3" || cmd == "LISTENING" || cmd == "SET_STATUS:LISTENING" || cmd == "SET_STATUS:3") {
+    onSetStatus(3);
+  } else if (cmd == "4" || cmd == "SPEAKING" || cmd == "THINKING" || cmd == "SET_STATUS:THINKING" || cmd == "SET_STATUS:4") {
+    onSetStatus(4);
+  } else if (cmd == "5" || cmd == "VECTOR" || cmd == "VECTOR_OK" || cmd == "SET_STATUS:5") {
+    onSetStatus(5);
+  } else if (cmd == "9" || cmd == "ERROR" || cmd == "SET_STATUS:ERROR" || cmd == "SET_STATUS:9") {
+    onSetStatus(9);
+  }
+  Serial.print("ACK_STATUS:");
+  Serial.println(current_status);
 }
 
 void loop() {
-  // Poll Bridge events from Linux
+  // 1. Poll Bridge events from Linux QRB2210 MPU
   Bridge.poll();
+
+  // 2. Poll USB Serial commands from Windows PC / Browser WebSerial
+  if (Serial.available() > 0) {
+    String incoming = Serial.readStringUntil('\n');
+    handleSerialCommand(incoming);
+  }
   delay(10);
 }
